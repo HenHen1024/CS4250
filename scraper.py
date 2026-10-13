@@ -9,11 +9,10 @@
 
 import requests
 from bs4 import BeautifulSoup
-from urllib.parse import urljoin
+from urllib.parse import urlparse, urlunparse
 
 # Defining the seed URL
 seed = "https://testingurl.dev/scraping/links/circular"
-baseURL = "https://testingurl.dev"
 allowed_prefix = "https://testingurl.dev/scraping/links/circular"
 
 # Creating the frontier and seen collections
@@ -37,19 +36,54 @@ while frontier:
         print(h1.get_text(strip=True))
 
     # Extracting and processing hyperlinks
-    links = []
     for a_tag in soup.find_all("a", href=True):
-        absolute_url = urljoin(url, a_tag["href"])
+        link = a_tag["href"].strip()
+        current = urlparse(url)
 
-        if absolute_url.startswith(allowed_prefix):
-            links.append(absolute_url)
+        # Convert relative URLs to absolute URLs without urljoin()
+        if link.startswith("https://") or link.startswith("http://"):
+            absolute_url = link
+        elif link.startswith("//"):
+            absolute_url = current.scheme + ":" + link
+        elif link.startswith("/"):
+            absolute_url = current.scheme + "://" + current.netloc + link
+        elif link.startswith("#"):
+            absolute_url = urlunparse(
+                (current.scheme, current.netloc, current.path,
+                 current.params, current.query, link[1:])
+            )
+        elif link.startswith("?"):
+            absolute_url = urlunparse(
+                (current.scheme, current.netloc, current.path,
+                 current.params, link[1:], "")
+            )
+        else:
+            # Resolve relative paths, including "." and ".."
+            path_parts = current.path.split("/")
+            if path_parts:
+                path_parts.pop()
 
-    # Add unseen links to seen and the frontier
-    for link in links:
-        if link not in seen:
-            seen.add(link)
-            frontier.append(link)
+            for part in link.split("/"):
+                if part in ("", "."):
+                    continue
+                if part == "..":
+                    if path_parts:
+                        path_parts.pop()
+                else:
+                    path_parts.append(part)
+
+            new_path = "/" + "/".join(path_parts)
+            absolute_url = urlunparse(
+                (current.scheme, current.netloc, new_path, "", "", "")
+            )
+
+        # Follow only URLs in the required section or its subpaths
+        if (absolute_url == allowed_prefix or
+                absolute_url.startswith(allowed_prefix + "/")):
+            if absolute_url not in seen:
+                seen.add(absolute_url)
+                frontier.append(absolute_url)
 
 # Printing all URLs in seen
-for url in seen:
-    print(url)
+for seen_url in seen:
+    print(seen_url)
