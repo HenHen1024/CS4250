@@ -19,6 +19,9 @@ db = client["assignment3"]
 documents = db["documents"]
 inverted_index = db["inverted_index"]
 
+# Clearing the collections so the program can be run multiple times
+documents.drop()
+inverted_index.drop()
 
 #-------------------------------------------------------------------------
 # FUNCTION: getTermFrequencies
